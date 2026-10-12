@@ -82,8 +82,21 @@ mod tests {
         let lava_drop = 1200.0 - grid.temp(0, 0);
         let water_rise = grid.temp(1, 0) - AMBIENT_TEMPERATURE;
         assert!(lava_drop > 0.0 && water_rise > 0.0);
-        // Water has twice the capacity of lava, so it warms up half as much
-        assert!((lava_drop / water_rise - 2.0).abs() < 0.01);
+        // Heat lost by lava equals heat gained by water, scaled by heat capacity (lava 5, water 4)
+        assert!((lava_drop / water_rise - 4.0 / 5.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn exposed_lava_stays_hot_for_a_long_time() {
+        let mut grid = Grid::new(5, 5);
+        grid.set(2, 2, LAVA);
+
+        for _ in 0..180 {
+            diffuse_heat(&mut grid);
+        }
+
+        // About 3 seconds at 60 steps/s: still well above the solidification point
+        assert!(grid.temp(2, 2) > 800.0, "lava cooled too fast: {}", grid.temp(2, 2));
     }
 
     #[test]

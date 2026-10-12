@@ -7,7 +7,7 @@
 /// - Thread-safe indexing (math-based, no locks)
 /// - Easy to serialize/save
 
-use crate::materials::{initial_temperature, MaterialId, AIR, AMBIENT_TEMPERATURE};
+use crate::materials::{initial_temperature, MaterialId, AIR, AMBIENT_TEMPERATURE, SAND, STONE, WATER};
 
 /// A rectangular pixel grid.
 pub struct Grid {
@@ -136,6 +136,17 @@ impl Grid {
     pub fn cells(&self) -> &Vec<MaterialId> {
         &self.cells
     }
+
+    /// Fill the starting terrain, from the bottom up: a bedrock (stone) layer,
+    /// a sand layer, then a water layer, all spanning the full grid width.
+    pub fn fill_base_layers(&mut self, bedrock: usize, sand: usize, water: usize) {
+        let mut bottom = self.height;
+        for (thickness, material) in [(bedrock, STONE), (sand, SAND), (water, WATER)] {
+            let thickness = thickness.min(bottom);
+            bottom -= thickness;
+            self.fill_rect(0, bottom, self.width, thickness, material);
+        }
+    }
 }
 
 #[cfg(test)]
@@ -143,6 +154,31 @@ mod tests {
     use super::*;
     use crate::materials::SAND;
 
+    #[test]
+    fn base_layers_stack_stone_sand_water_from_the_bottom() {
+        let mut grid = Grid::new(4, 10);
+        grid.fill_base_layers(2, 3, 2);
+
+        for x in 0..4 {
+            assert_eq!(grid.get(x, 9), STONE);
+            assert_eq!(grid.get(x, 8), STONE);
+            assert_eq!(grid.get(x, 7), SAND);
+            assert_eq!(grid.get(x, 5), SAND);
+            assert_eq!(grid.get(x, 4), WATER);
+            assert_eq!(grid.get(x, 3), WATER);
+            assert_eq!(grid.get(x, 2), AIR);
+        }
+    }
+
+    #[test]
+    fn base_layers_are_clamped_to_the_grid_height() {
+        let mut grid = Grid::new(2, 4);
+        grid.fill_base_layers(3, 3, 3);
+
+        assert_eq!(grid.count_material(STONE), 6);
+        assert_eq!(grid.count_material(SAND), 2);
+        assert_eq!(grid.count_material(WATER), 0);
+    }
     #[test]
     fn test_grid_creation() {
         let grid = Grid::new(100, 100);

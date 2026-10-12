@@ -205,7 +205,7 @@ mod tests {
 
         let mut first_stone_step = None;
         let mut all_stone_step = None;
-        for step in 0..3000 {
+        for step in 0..20000 {
             tick(&mut grid, &mut rng);
             let stones = grid.count_material(STONE);
             if stones > 0 && first_stone_step.is_none() {

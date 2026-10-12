@@ -155,8 +155,13 @@ in place when touching a flammable cell, otherwise it flickers upward randomly.
 Water, lava and acid that cannot fall move horizontally. Each cell first looks up
 to 8 cells sideways (through air only) for the nearest ledge with air below and
 heads there; otherwise it takes one random step to level the surface. Viscosity
-sets the number of flow substeps per step (water: 9). Destinations are reserved so
-two cells never move into the same spot.
+sets the number of flow substeps per step (water: 9) and the chance a cell
+moves on each substep (`(255 - viscosity) / 255`). Lava's viscosity depends on its
+temperature (`effective_viscosity`): hot lava (1200 °C) is almost as runny as water, and
+it thickens toward 220 as it cools to its 650 °C solidification point, so a cooling flow
+creeps and then freezes into stone. Falling is never slowed: lava (like every liquid)
+drops one row per step in `gravity.rs`, so lone droplets fall freely.
+Destinations are reserved so two cells never move into the same spot.
 
 ---
 
@@ -166,7 +171,8 @@ neighboring cells in proportion to their temperature difference and the *lower* 
 their conductivities (`thermal_conductivity` in `materials.rs`, so air insulates while
 water and lava exchange heat quickly). The temperature change is divided by the cell's
 `heat_capacity`: water (4) heats up slowly and therefore soaks a lot of heat out of
-lava (2). Fire is a constant heat source (≥ 700 °C while it burns), lava starts at
+lava (5, which also makes lava hold its heat for several seconds in open air; air
+conductivity is very low). Fire is a constant heat source (≥ 700 °C while it burns), lava starts at
 1200 °C and cools down, and air relaxes toward ambient. Temperature travels with the
 cell when it moves (`Grid::swap`).
 
@@ -226,8 +232,7 @@ coordinates with Bevy's `viewport_to_world_2d`, then mapped into the centered
 visible cursor and the affected cell stay aligned, including when the window is
 resized or uses a non-square aspect ratio.
 
-Controls: left-click digs, right-click builds, Space toggles the brush between 3×3
-and 5×5, and number keys select the material:
+Controls: left-click digs, right-click builds, numpad +/- steps the brush size through 4×4, 8×8, 16×16 and 32×32 (the red cursor square always matches the brush), and number keys select the material:
 
 | Key | Material | Key | Material |
 |---|---|---|---|
@@ -262,12 +267,13 @@ cargo run --release       # Run optimized
 ```
 Fortress starting...
 Bevy app initialized: 512x512
-Sand placed at (100-412, 50-100)
-Water placed at (100-412, 120-150)
+Terrain layers (bottom to top): bedrock 20, sand 60, water 50 rows
 ```
 
-The grid is rendered to the window; sand and water fall under gravity. Use the mouse
-to dig/build, keys 1-9 to select materials, and Space to toggle brush size.
+The grid starts with a full-width bedrock (stone) layer at the bottom, a sand layer above
+it and a water layer on top (thicknesses are the `*_THICKNESS` constants in `main.rs`,
+built by `Grid::fill_base_layers`). Use the mouse
+to dig/build, keys 1-9 to select materials, and numpad +/- to change brush size (4/8/16/32).
 
 ### Test
 ```bash
@@ -352,7 +358,7 @@ cargo run --release
 - [x] Track mouse position and show a cursor sprite
 - [x] Dig mode: left-click sets cells to AIR
 - [x] Build mode: right-click places the selected material
-- [x] Toggle brush size between 3×3 and 5×5
+- [x] Brush sizes 4×4 to 32×32 via numpad +/-, cursor square matches brush
 - [x] Select materials with keys 1-9 (sand, water, wood, stone, lava, acid, fire, steam, ash)
 - [x] Use the camera-to-world-to-grid mapping for both cursor and grid input
 
@@ -366,7 +372,7 @@ nearby ledges and level out in containers; viscosity scales the flow substeps. F
 and steam rise. Heat is simulated per cell: fire and lava emit heat, water absorbs it,
 hot wood ignites, water boils into steam (which condenses when cold), lava solidifies
 as it cools, and acid dissolves solids. The debug overlay shows the temperature under
-the cursor. Focused, seeded tests cover each behavior (34 library tests total).
+the cursor. Focused, seeded tests cover each behavior (43 library tests total).
 
 **TODO:**
 - [x] Extend liquid flow toward horizontal equilibrium and account for viscosity (water seeks ledges within 8 cells, otherwise random-steps to level out)

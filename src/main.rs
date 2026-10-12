@@ -8,6 +8,11 @@ use std::sync::Mutex;
 /// Orthographic scale: 0.5 = 2x zoom, 0.25 = 4x zoom
 const CAMERA_ZOOM_SCALE: f32 = 0.5;
 
+/// Starting terrain layer thicknesses, in grid rows.
+const BEDROCK_THICKNESS: usize = 20;
+const SAND_THICKNESS: usize = 60;
+const WATER_THICKNESS: usize = 50;
+
 // Shared grid state
 #[derive(Resource)]
 struct SharedGrid(Mutex<Grid>);
@@ -46,7 +51,7 @@ fn main() {
         .insert_resource(GridImageHandle(Handle::default()))
         .insert_resource(PlayerInput::default())
         .add_systems(Startup, setup)
-        .add_systems(Update, (update_cursor_position, update_debug_text, handle_input, physics_step, render_grid).chain())
+        .add_systems(Update, (update_debug_text, handle_input, update_cursor_position, physics_step, render_grid).chain())
         .run();
 }
 
@@ -71,20 +76,8 @@ fn setup(
     let width = grid.width as u32;
     let height = grid.height as u32;
     
-    // IMPORTANT: Add test data so we can see something!
-    // Fill a region with sand at the top
-    for y in 50..100 {
-        for x in 100..412 {
-            grid.set(x, y, fortress_lib::materials::SAND);
-        }
-    }
-    
-    // Add some water too
-    for y in 120..150 {
-        for x in 100..412 {
-            grid.set(x, y, fortress_lib::materials::WATER);
-        }
-    }
+    // Starting terrain: bedrock at the bottom, sand above it, water on top
+    grid.fill_base_layers(BEDROCK_THICKNESS, SAND_THICKNESS, WATER_THICKNESS);
     
     drop(grid);
     
@@ -116,11 +109,11 @@ fn setup(
         ..default()
     });
     
-    // Create cursor (small red square that follows mouse)
+    // Create cursor (translucent red square matching the brush size, resized every frame)
     commands.spawn((
         Sprite {
-            color: Color::srgb(1.0, 0.0, 0.0),  // Red
-            custom_size: Some(Vec2::new(20.0, 20.0)),  // 20x20 world units (more visible)
+            color: Color::srgba(1.0, 0.0, 0.0, 0.4),
+            custom_size: Some(Vec2::splat(8.0)),
             ..default()
         },
         Transform::default(),
@@ -136,26 +129,24 @@ fn setup(
     ));
     
     println!("Bevy app initialized: {}x{}", width, height);
-    println!("Sand placed at (100-412, 50-100)");
-    println!("Water placed at (100-412, 120-150)");
+    println!("Terrain layers (bottom to top): bedrock {BEDROCK_THICKNESS}, sand {SAND_THICKNESS}, water {WATER_THICKNESS} rows");
 }
 
-/// Update cursor position based on mouse movement and display it
+/// Keep the red cursor square matched to the brush: same size in cells, snapped to
+/// the grid so it covers exactly the cells the brush will paint.
 fn update_cursor_position(
-    mut cursor_query: Query<&mut Transform, With<CursorMarker>>,
-    q_windows: Query<&Window>,
-    camera_query: Query<(&Camera, &GlobalTransform)>,
+    mut cursor_query: Query<(&mut Transform, &mut Sprite), With<CursorMarker>>,
+    player_input: Res<PlayerInput>,
 ) {
-    if let Ok(window) = q_windows.single() {
-        if let Some(cursor_pos) = window.cursor_position() {
-            if let Ok((camera, camera_transform)) = camera_query.single() {
-                if let Ok(world_pos) = camera.viewport_to_world_2d(camera_transform, cursor_pos) {
-                    if let Ok(mut transform) = cursor_query.single_mut() {
-                        transform.translation = world_pos.extend(1.0);
-                    }
-                }
-            }
-        }
+    if let Ok((mut transform, mut sprite)) = cursor_query.single_mut() {
+        let size = player_input.0.brush_size as f32;
+        sprite.custom_size = Some(Vec2::splat(size));
+        // Inverse of world_to_grid_coords: the brush is centered on the cell's top-left corner
+        transform.translation = Vec3::new(
+            player_input.0.cursor_x as f32 - 256.0,
+            256.0 - player_input.0.cursor_y as f32,
+            1.0,
+        );
     }
 }
 
@@ -254,9 +245,17 @@ fn handle_input(
         }
     }
     
-    // Toggle brush size with Space
-    if key_input.just_pressed(KeyCode::Space) {
-        player_input.0.brush_size = if player_input.0.brush_size == 3 { 5 } else { 3 };
+    // Numpad +/- steps through the brush sizes
+    let mut size_changed = false;
+    if key_input.just_pressed(KeyCode::NumpadAdd) {
+        player_input.0.increase_brush();
+        size_changed = true;
+    }
+    if key_input.just_pressed(KeyCode::NumpadSubtract) {
+        player_input.0.decrease_brush();
+        size_changed = true;
+    }
+    if size_changed {
         println!("Brush size: {}x{}", player_input.0.brush_size, player_input.0.brush_size);
     }
     

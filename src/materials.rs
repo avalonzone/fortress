@@ -91,7 +91,7 @@ pub fn get_properties(material_id: MaterialId) -> MaterialProperties {
         },
         LAVA => MaterialProperties {
             density: 60,
-            viscosity: 100,
+            viscosity: 220, // thick: creeps and falls slowly
             is_fluid: true,
             color: [255, 100, 0, 255], // Orange-red
             flammable: false,
@@ -155,7 +155,7 @@ pub fn initial_temperature(material_id: MaterialId) -> f32 {
 /// insulates while water and lava exchange heat quickly.
 pub fn thermal_conductivity(material_id: MaterialId) -> f32 {
     match material_id {
-        AIR => 0.005,
+        AIR => 0.0015,
         SAND => 0.05,
         WATER => 0.2,
         WOOD => 0.08,
@@ -174,10 +174,27 @@ pub fn thermal_conductivity(material_id: MaterialId) -> f32 {
 pub fn heat_capacity(material_id: MaterialId) -> f32 {
     match material_id {
         WATER => 4.0,
-        LAVA | ACID => 2.0,
+        LAVA => 5.0, // lava holds its heat for a long time
+        ACID => 2.0,
         WOOD | STONE => 1.5,
         _ => 1.0,
     }
+}
+
+/// Lava is runny when hot and thickens as it cools toward solidification.
+const LAVA_HOT_VISCOSITY: f32 = 30.0;
+const LAVA_HOT_TEMPERATURE: f32 = 1200.0;
+const LAVA_COLD_TEMPERATURE: f32 = 650.0;
+
+/// Viscosity of a cell, taking temperature into account (only lava changes).
+pub fn effective_viscosity(material_id: MaterialId, temp: f32) -> u8 {
+    let base = get_properties(material_id).viscosity;
+    if material_id != LAVA {
+        return base;
+    }
+    let hotness =
+        ((temp - LAVA_COLD_TEMPERATURE) / (LAVA_HOT_TEMPERATURE - LAVA_COLD_TEMPERATURE)).clamp(0.0, 1.0);
+    (base as f32 - hotness * (base as f32 - LAVA_HOT_VISCOSITY)) as u8
 }
 
 /// Helper: is a material denser than another?

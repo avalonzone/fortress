@@ -113,6 +113,19 @@ mod tests {
     use crate::materials::SAND;
 
     #[test]
+    fn lava_falls_as_fast_as_water() {
+        use crate::materials::{LAVA, WATER};
+        for material in [LAVA, WATER] {
+            let mut grid = Grid::new(3, 12);
+            grid.set(1, 0, material);
+            for _ in 0..5 {
+                apply_gravity(&mut grid);
+            }
+            assert_eq!(grid.get(1, 5), material, "free-falling cell must drop one row per step");
+        }
+    }
+
+    #[test]
     fn test_sand_falls() {
         let mut grid = Grid::new(10, 10);
         // Place sand at (5, 3)

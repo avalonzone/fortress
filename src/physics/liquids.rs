@@ -1,7 +1,7 @@
 /// Horizontal spreading for liquids that cannot fall further.
 
 use crate::grid::Grid;
-use crate::materials::{get_properties, ACID, AIR, LAVA, WATER};
+use crate::materials::{effective_viscosity, get_properties, ACID, AIR, LAVA, WATER};
 use rand::Rng;
 
 const MAX_HORIZONTAL_FLOW_SUBSTEPS: usize = 10;
@@ -14,18 +14,24 @@ fn horizontal_flow_substeps(viscosity: u8) -> usize {
         / viscosity_range
 }
 
+/// Chance per substep that a liquid cell actually moves sideways. Thick liquids
+/// (lava) creep: 0 = always moves, 255 = almost never.
+fn move_chance(viscosity: u8) -> f64 {
+    (u8::MAX - viscosity) as f64 / u8::MAX as f64
+}
+
 pub fn spread_liquids(grid: &mut Grid) {
     let viscosity = get_properties(WATER).viscosity;
     spread_liquids_with_rng(grid, &mut rand::thread_rng(), viscosity);
 }
 
 fn spread_liquids_with_rng<R: Rng + ?Sized>(grid: &mut Grid, rng: &mut R, viscosity: u8) {
-    for _ in 0..horizontal_flow_substeps(viscosity) {
-        spread_liquids_once(grid, rng);
+    for substep in 0..horizontal_flow_substeps(viscosity) {
+        spread_liquids_once(grid, rng, substep);
     }
 }
 
-fn spread_liquids_once<R: Rng + ?Sized>(grid: &mut Grid, rng: &mut R) {
+fn spread_liquids_once<R: Rng + ?Sized>(grid: &mut Grid, rng: &mut R, substep: usize) {
     if grid.width == 0 || grid.height == 0 {
         return;
     }
@@ -48,6 +54,12 @@ fn spread_liquids_once<R: Rng + ?Sized>(grid: &mut Grid, rng: &mut R) {
                         && get_properties(grid.get(x + 1, y + 1)).density < density));
 
             if can_fall {
+                continue;
+            }
+
+            // Thick liquids (cooling lava) get fewer substeps and often skip their turn
+            let viscosity = effective_viscosity(liquid, grid.temp(x, y));
+            if substep >= horizontal_flow_substeps(viscosity) || !rng.gen_bool(move_chance(viscosity)) {
                 continue;
             }
 
@@ -182,6 +194,36 @@ mod tests {
         for x in 1..9 {
             assert_eq!(grid.get(x, 6), WATER, "column {x} should be filled");
         }
+    }
+
+    #[test]
+    fn cooling_lava_flows_slower_than_hot_lava() {
+        fn spread_after(temp: f32, steps: usize) -> usize {
+            let mut grid = Grid::new(41, 3);
+            grid.fill_rect(0, 2, 41, 1, STONE);
+            grid.set(20, 1, LAVA);
+            grid.set_temp(20, 1, temp);
+            let mut rng = StdRng::seed_from_u64(9);
+            let mut farthest = 0;
+            for _ in 0..steps {
+                spread_liquids_with_rng(&mut grid, &mut rng, get_properties(WATER).viscosity);
+                for x in 0..41 {
+                    if grid.get(x, 1) == LAVA {
+                        farthest = farthest.max((x as i32 - 20).unsigned_abs() as usize);
+                    }
+                }
+            }
+            farthest
+        }
+
+        assert!(spread_after(700.0, 20) < spread_after(1200.0, 20));
+    }
+
+    #[test]
+    fn hot_lava_is_almost_as_runny_as_water_and_cold_lava_is_thick() {
+        assert!(effective_viscosity(LAVA, 1200.0) < 50);
+        assert!(effective_viscosity(LAVA, 660.0) > 200);
+        assert_eq!(effective_viscosity(WATER, 1200.0), get_properties(WATER).viscosity);
     }
 
     #[test]
