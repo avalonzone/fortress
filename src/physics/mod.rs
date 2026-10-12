@@ -11,6 +11,7 @@ use crate::grid::Grid;
 /// This orchestrates the entire simulation.
 pub fn step(grid: &mut Grid, _dt: f32) {
     gravity::apply_gravity(grid);
+    gravity::apply_gases(grid);
     liquids::spread_liquids(grid);
-    // reactions::process_reactions(grid);
+    reactions::process_reactions(grid);
 }

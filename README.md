@@ -308,12 +308,12 @@ direction is randomized to avoid a consistent left/right bias. Focused tests
 cover sideways spreading, preserving the falling path, and viscosity scaling.
 
 **TODO:**
-- [ ] Extend liquid flow toward horizontal equilibrium and account for viscosity
-- [ ] Implement `reactions::process_reactions()` (fire + wood → ash)
+- [x] Extend liquid flow toward horizontal equilibrium and account for viscosity (water seeks ledges within 8 cells, otherwise random-steps to level out)
+- [x] Implement `reactions::process_reactions()` (fire spreads to adjacent wood, burns out into ash, is extinguished by water)
 - [ ] Add temperature tracking (optional for MVP)
 - [x] Test: blocked water spreads sideways and water with a fall path keeps falling
-- [ ] Test: water flows downhill and spreads in containers
-- [ ] Test: wood catches fire, spreads, leaves ash
+- [x] Test: water flows downhill and spreads in containers
+- [x] Test: wood catches fire, spreads, leaves ash
 
 ---
 

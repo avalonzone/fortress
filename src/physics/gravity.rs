@@ -7,7 +7,58 @@
 /// 4. Swap cells instead of copying for speed
 
 use crate::grid::Grid;
-use crate::materials::{get_properties, AIR};
+use crate::materials::{get_properties, AIR, FIRE, STEAM};
+use rand::Rng;
+
+/// Gases rise: steam always drifts up, fire flickers upward unless it is
+/// sitting next to fuel. Iterates top to bottom so a gas moves once per step.
+pub fn apply_gases(grid: &mut Grid) {
+    apply_gases_with_rng(grid, &mut rand::thread_rng());
+}
+
+fn apply_gases_with_rng<R: Rng + ?Sized>(grid: &mut Grid, rng: &mut R) {
+    for y in 0..grid.height {
+        for x in 0..grid.width {
+            let current = grid.get(x, y);
+            if current != FIRE && current != STEAM {
+                continue;
+            }
+
+            if current == FIRE {
+                let touches_fuel = [(-1i32, 0i32), (1, 0), (0, -1), (0, 1)].iter().any(|&(dx, dy)| {
+                    let nx = x as i32 + dx;
+                    let ny = y as i32 + dy;
+                    nx >= 0
+                        && ny >= 0
+                        && (nx as usize) < grid.width
+                        && (ny as usize) < grid.height
+                        && get_properties(grid.get(nx as usize, ny as usize)).flammable
+                });
+                if touches_fuel || rng.gen_bool(0.5) {
+                    continue;
+                }
+            }
+
+            let dx: i32 = match rng.gen_range(0..3) {
+                0 => -1,
+                1 => 0,
+                _ => 1,
+            };
+            let candidates: [(i32, i32); 3] = [(0, -1), (dx, -1), (dx, 0)];
+            for (cx, cy) in candidates {
+                let nx = x as i32 + cx;
+                let ny = y as i32 + cy;
+                if nx < 0 || ny < 0 || nx as usize >= grid.width || ny as usize >= grid.height {
+                    continue;
+                }
+                if grid.get(nx as usize, ny as usize) == AIR {
+                    grid.swap(x, y, nx as usize, ny as usize);
+                    break;
+                }
+            }
+        }
+    }
+}
 
 pub fn apply_gravity(grid: &mut Grid) {
     // Iterate from bottom row upward
@@ -18,8 +69,8 @@ pub fn apply_gravity(grid: &mut Grid) {
             let current = grid.get(x, y);
             let current_props = get_properties(current);
 
-            // Skip air and non-active materials (they don't fall)
-            if current == AIR || !current_props.active {
+            // Skip air, gases (handled by apply_gases) and non-active materials
+            if current == AIR || current == FIRE || current == STEAM || !current_props.active {
                 continue;
             }
 

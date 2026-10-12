@@ -7,7 +7,7 @@
 /// - Space: Toggle brush size between 3x3 and 5x5
 
 use crate::grid::Grid;
-use crate::materials::{MaterialId, SAND, WATER, WOOD, STONE, AIR};
+use crate::materials::{MaterialId, SAND, WATER, WOOD, STONE, LAVA, ACID, FIRE, STEAM, ASH, AIR};
 
 /// Tracks player input state: selected material, brush, cursor position.
 #[derive(Debug, Clone, Copy)]
@@ -72,7 +72,11 @@ pub fn material_from_key(key: u32) -> Option<MaterialId> {
         50 => Some(WATER),     // '2' key
         51 => Some(WOOD),      // '3' key
         52 => Some(STONE),     // '4' key
-        // Extend with more materials as added
+        53 => Some(LAVA),      // '5' key
+        54 => Some(ACID),      // '6' key
+        55 => Some(FIRE),      // '7' key
+        56 => Some(STEAM),     // '8' key
+        57 => Some(ASH),       // '9' key
         _ => None,
     }
 }

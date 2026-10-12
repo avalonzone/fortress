@@ -6,6 +6,9 @@ use fortress_lib::materials::get_properties;
 use fortress_lib::input::{InputState, apply_brush};
 use std::sync::Mutex;
 
+/// Orthographic scale: 0.5 = 2x zoom, 0.25 = 4x zoom
+const CAMERA_ZOOM_SCALE: f32 = 0.5;
+
 // Shared grid state
 #[derive(Resource)]
 struct SharedGrid(Mutex<Grid>);
@@ -55,7 +58,14 @@ fn setup(
     shared_grid: Res<SharedGrid>,
 ) {
     // Create camera
-    commands.spawn(Camera2d::default());
+    // Zoom in: scale < 1 shows less world, so each grid pixel appears bigger
+    commands.spawn((
+        Camera2d,
+        Projection::Orthographic(OrthographicProjection {
+            scale: CAMERA_ZOOM_SCALE,
+            ..OrthographicProjection::default_2d()
+        }),
+    ));
     
     // Get grid size
     let mut grid = shared_grid.0.lock().unwrap();

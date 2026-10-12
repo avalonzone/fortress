@@ -1,10 +1,11 @@
 /// Horizontal spreading for liquids that cannot fall further.
 
 use crate::grid::Grid;
-use crate::materials::{get_properties, AIR, WATER};
+use crate::materials::{get_properties, ACID, AIR, LAVA, WATER};
 use rand::Rng;
 
 const MAX_HORIZONTAL_FLOW_SUBSTEPS: usize = 10;
+const DROP_SEARCH_RANGE: usize = 8;
 
 fn horizontal_flow_substeps(viscosity: u8) -> usize {
     let viscosity_range = u8::MAX as usize;
@@ -34,11 +35,12 @@ fn spread_liquids_once<R: Rng + ?Sized>(grid: &mut Grid, rng: &mut R) {
 
     for y in 0..grid.height {
         for x in 0..grid.width {
-            if grid.get(x, y) != WATER {
+            let liquid = grid.get(x, y);
+            if liquid != WATER && liquid != LAVA && liquid != ACID {
                 continue;
             }
 
-            let density = get_properties(WATER).density;
+            let density = get_properties(liquid).density;
             let can_fall = y + 1 < grid.height
                 && ((get_properties(grid.get(x, y + 1)).density < density)
                     || (x > 0 && get_properties(grid.get(x - 1, y + 1)).density < density)
@@ -50,19 +52,54 @@ fn spread_liquids_once<R: Rng + ?Sized>(grid: &mut Grid, rng: &mut R) {
             }
 
             let directions = if rng.gen_bool(0.5) { [-1, 1] } else { [1, -1] };
-            for dx in directions {
-                let next_x = x as isize + dx;
-                if next_x < 0 || next_x >= grid.width as isize {
-                    continue;
-                }
 
-                let next_x = next_x as usize;
-                let destination_index = next_x + y * grid.width;
-                if grid.get(next_x, y) == AIR && !reserved_destinations[destination_index] {
-                    reserved_destinations[destination_index] = true;
-                    moves.push((x, y, next_x, y));
-                    break;
+            // Prefer the nearest ledge within reach so water drains toward lower ground
+            let mut target = None;
+            let mut best_distance = usize::MAX;
+            for dx in directions {
+                for distance in 1..=DROP_SEARCH_RANGE {
+                    let next_x = x as isize + dx * distance as isize;
+                    if next_x < 0 || next_x >= grid.width as isize {
+                        break;
+                    }
+                    let next_x = next_x as usize;
+                    if grid.get(next_x, y) != AIR {
+                        break;
+                    }
+                    let has_drop = y + 1 < grid.height
+                        && get_properties(grid.get(next_x, y + 1)).density < density;
+                    if has_drop {
+                        if distance < best_distance
+                            && !reserved_destinations[next_x + y * grid.width]
+                        {
+                            best_distance = distance;
+                            target = Some(next_x);
+                        }
+                        break;
+                    }
                 }
+            }
+
+            // Otherwise take a single random step to level out the surface
+            if target.is_none() {
+                for dx in directions {
+                    let next_x = x as isize + dx;
+                    if next_x < 0 || next_x >= grid.width as isize {
+                        continue;
+                    }
+                    let next_x = next_x as usize;
+                    if grid.get(next_x, y) == AIR
+                        && !reserved_destinations[next_x + y * grid.width]
+                    {
+                        target = Some(next_x);
+                        break;
+                    }
+                }
+            }
+
+            if let Some(next_x) = target {
+                reserved_destinations[next_x + y * grid.width] = true;
+                moves.push((x, y, next_x, y));
             }
         }
     }
@@ -104,6 +141,47 @@ mod tests {
         assert_eq!(grid.get(2, 1), WATER);
         assert_eq!(grid.get(1, 1), AIR);
         assert_eq!(grid.get(3, 1), AIR);
+    }
+
+    #[test]
+    fn water_flows_off_a_ledge_and_downhill() {
+        let mut grid = Grid::new(12, 6);
+        grid.fill_rect(0, 3, 4, 1, STONE);
+        grid.fill_rect(0, 5, 12, 1, STONE);
+        grid.set(1, 2, WATER);
+        let mut rng = StdRng::seed_from_u64(3);
+
+        for _ in 0..40 {
+            crate::physics::gravity::apply_gravity(&mut grid);
+            spread_liquids_with_rng(&mut grid, &mut rng, get_properties(WATER).viscosity);
+        }
+
+        assert_eq!(grid.count_material(WATER), 1);
+        assert_eq!(grid.get(1, 2), AIR);
+        assert_eq!(grid.get(1, 3), STONE);
+        assert!((0..12).any(|x| grid.get(x, 4) == WATER));
+    }
+
+    #[test]
+    fn water_levels_out_in_a_container() {
+        let mut grid = Grid::new(10, 8);
+        grid.fill_rect(0, 7, 10, 1, STONE);
+        grid.fill_rect(0, 0, 1, 8, STONE);
+        grid.fill_rect(9, 0, 1, 8, STONE);
+        grid.fill_rect(1, 3, 2, 4, WATER);
+        let total = grid.count_material(WATER);
+        let mut rng = StdRng::seed_from_u64(11);
+
+        for _ in 0..300 {
+            crate::physics::gravity::apply_gravity(&mut grid);
+            spread_liquids_with_rng(&mut grid, &mut rng, get_properties(WATER).viscosity);
+        }
+
+        assert_eq!(grid.count_material(WATER), total);
+        // 8 water cells across 8 interior columns: a single flat layer
+        for x in 1..9 {
+            assert_eq!(grid.get(x, 6), WATER, "column {x} should be filled");
+        }
     }
 
     #[test]
