@@ -2,7 +2,6 @@ use bevy::prelude::*;
 use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
 use bevy::asset::RenderAssetUsages;
 use fortress_lib::grid::Grid;
-use fortress_lib::materials::get_properties;
 use fortress_lib::input::{InputState, apply_brush};
 use std::sync::Mutex;
 
@@ -165,7 +164,14 @@ fn update_debug_text(
     mut text_query: Query<&mut Text, With<DebugText>>,
     player_input: Res<PlayerInput>,
     q_windows: Query<&Window>,
+    shared_grid: Res<SharedGrid>,
 ) {
+    let cursor_temp = shared_grid
+        .0
+        .lock()
+        .unwrap()
+        .temp(player_input.0.cursor_x as usize, player_input.0.cursor_y as usize);
+
     // Material names
     let material_names = ["AIR", "SAND", "WATER", "WOOD", "STONE", "LAVA", "ACID", "FIRE", "STEAM", "ASH"];
     let material_name = if (player_input.0.selected_material as usize) < material_names.len() {
@@ -182,9 +188,10 @@ fn update_debug_text(
     };
     
     let debug_text = format!(
-        "Mouse: ({}, {})\nMaterial: {} ({})\nBrush: {}x{}\n{}",
+        "Mouse: ({}, {})\nTemp: {:.0} C\nMaterial: {} ({})\nBrush: {}x{}\n{}",
         player_input.0.cursor_x,
         player_input.0.cursor_y,
+        cursor_temp,
         material_name,
         player_input.0.selected_material,
         player_input.0.brush_size,
@@ -287,28 +294,13 @@ fn render_grid(
     mut images: ResMut<Assets<Image>>,
     shared_grid: Res<SharedGrid>,
     image_handle: Res<GridImageHandle>,
+    mut frame: Local<u32>,
 ) {
-    let grid = shared_grid.0.lock().unwrap();
-    let width = grid.width;
-    let height = grid.height;
-    
-    // Build pixel buffer
-    let mut pixels = vec![0u8; width * height * 4];
-    for y in 0..height {
-        for x in 0..width {
-            let material_id = grid.get(x, y);
-            let props = get_properties(material_id);
-            let [r, g, b, a] = props.color;
-            
-            let idx = (y * width + x) * 4;
-            pixels[idx] = r;
-            pixels[idx + 1] = g;
-            pixels[idx + 2] = b;
-            pixels[idx + 3] = a;
-        }
-    }
-    
-    drop(grid);
+    *frame = frame.wrapping_add(1);
+    let pixels = {
+        let grid = shared_grid.0.lock().unwrap();
+        fortress_lib::rendering::render_pixels(&grid, *frame)
+    };
     
     // Update image
     if let Some(mut image) = images.get_mut(&image_handle.0) {

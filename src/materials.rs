@@ -137,6 +137,49 @@ pub fn get_properties(material_id: MaterialId) -> MaterialProperties {
     }
 }
 
+/// Room temperature in °C; air relaxes toward it.
+pub const AMBIENT_TEMPERATURE: f32 = 20.0;
+
+/// Temperature a freshly placed cell of this material starts at.
+pub fn initial_temperature(material_id: MaterialId) -> f32 {
+    match material_id {
+        LAVA => 1200.0,
+        FIRE => 800.0,
+        STEAM => 110.0,
+        _ => AMBIENT_TEMPERATURE,
+    }
+}
+
+/// How easily heat flows through a material (0..~0.2 per step).
+/// Heat flow between two cells uses the lower of the two values, so air
+/// insulates while water and lava exchange heat quickly.
+pub fn thermal_conductivity(material_id: MaterialId) -> f32 {
+    match material_id {
+        AIR => 0.005,
+        SAND => 0.05,
+        WATER => 0.2,
+        WOOD => 0.08,
+        STONE => 0.1,
+        LAVA => 0.15,
+        ACID => 0.1,
+        FIRE => 0.15,
+        STEAM => 0.03,
+        ASH => 0.03,
+        _ => 0.005,
+    }
+}
+
+/// How much energy it takes to change temperature (higher = slower to heat or cool).
+/// Water's high value is what lets it soak heat out of lava.
+pub fn heat_capacity(material_id: MaterialId) -> f32 {
+    match material_id {
+        WATER => 4.0,
+        LAVA | ACID => 2.0,
+        WOOD | STONE => 1.5,
+        _ => 1.0,
+    }
+}
+
 /// Helper: is a material denser than another?
 /// Used for settling order (heavier materials fall through lighter ones).
 pub fn is_denser_than(a: MaterialId, b: MaterialId) -> bool {

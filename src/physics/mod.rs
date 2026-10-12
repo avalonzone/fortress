@@ -4,6 +4,7 @@
 pub mod gravity;
 pub mod liquids;
 pub mod reactions;
+pub mod temperature;
 
 use crate::grid::Grid;
 
@@ -13,5 +14,6 @@ pub fn step(grid: &mut Grid, _dt: f32) {
     gravity::apply_gravity(grid);
     gravity::apply_gases(grid);
     liquids::spread_liquids(grid);
+    temperature::diffuse_heat(grid);
     reactions::process_reactions(grid);
 }

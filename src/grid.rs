@@ -7,12 +7,14 @@
 /// - Thread-safe indexing (math-based, no locks)
 /// - Easy to serialize/save
 
-use crate::materials::{MaterialId, AIR};
+use crate::materials::{initial_temperature, MaterialId, AIR, AMBIENT_TEMPERATURE};
 
 /// A rectangular pixel grid.
 pub struct Grid {
     /// Flat storage: cells[x + y * width]
     cells: Vec<MaterialId>,
+    /// Temperature of each cell in °C, same layout as `cells`.
+    temps: Vec<f32>,
     pub width: usize,
     pub height: usize,
 }
@@ -23,6 +25,7 @@ impl Grid {
         let size = width * height;
         Grid {
             cells: vec![AIR; size],
+            temps: vec![AMBIENT_TEMPERATURE; size],
             width,
             height,
         }
@@ -49,11 +52,13 @@ impl Grid {
         }
     }
 
-    /// Set material at position (panics if out of bounds).
+    /// Set material at position and reset its temperature to the material's
+    /// starting temperature (e.g. lava starts at 1200 °C). Used for player placement.
     pub fn set(&mut self, x: usize, y: usize, material: MaterialId) {
         match self.index(x, y) {
             Some(idx) => {
                 self.cells[idx] = material;
+                self.temps[idx] = initial_temperature(material);
             }
             None => {
                 eprintln!("Grid write out of bounds: ({}, {}) in {}x{}", x, y, self.width, self.height);
@@ -61,11 +66,36 @@ impl Grid {
         }
     }
 
-    /// Swap two cells. Useful for falling sand: instead of copying,
-    /// swap cell A with cell B.
+    /// Change the material but keep the cell's current temperature
+    /// (used by reactions such as lava cooling into stone).
+    pub fn set_keep_temp(&mut self, x: usize, y: usize, material: MaterialId) {
+        if let Some(idx) = self.index(x, y) {
+            self.cells[idx] = material;
+        }
+    }
+
+    /// Temperature of a cell in °C (ambient if out of bounds).
+    pub fn temp(&self, x: usize, y: usize) -> f32 {
+        self.index(x, y).map_or(AMBIENT_TEMPERATURE, |idx| self.temps[idx])
+    }
+
+    pub fn set_temp(&mut self, x: usize, y: usize, temp: f32) {
+        if let Some(idx) = self.index(x, y) {
+            self.temps[idx] = temp;
+        }
+    }
+
+    /// Direct access to temperatures (for the heat diffusion loop).
+    pub fn temps_mut(&mut self) -> &mut Vec<f32> {
+        &mut self.temps
+    }
+
+    /// Swap two cells (material and temperature). Useful for falling sand:
+    /// instead of copying, swap cell A with cell B.
     pub fn swap(&mut self, x1: usize, y1: usize, x2: usize, y2: usize) {
         if let (Some(idx1), Some(idx2)) = (self.index(x1, y1), self.index(x2, y2)) {
             self.cells.swap(idx1, idx2);
+            self.temps.swap(idx1, idx2);
         }
     }
 
