@@ -1,5 +1,4 @@
 /// Horizontal spreading for liquids that cannot fall further.
-
 use crate::grid::Grid;
 use crate::materials::{effective_viscosity, get_properties, ACID, AIR, LAVA, WATER};
 use rand::Rng;
@@ -9,8 +8,7 @@ const DROP_SEARCH_RANGE: usize = 8;
 
 fn horizontal_flow_substeps(viscosity: u8) -> usize {
     let viscosity_range = u8::MAX as usize;
-    1 + (MAX_HORIZONTAL_FLOW_SUBSTEPS - 1)
-        * (viscosity_range - viscosity as usize)
+    1 + (MAX_HORIZONTAL_FLOW_SUBSTEPS - 1) * (viscosity_range - viscosity as usize)
         / viscosity_range
 }
 
@@ -59,7 +57,9 @@ fn spread_liquids_once<R: Rng + ?Sized>(grid: &mut Grid, rng: &mut R, substep: u
 
             // Thick liquids (cooling lava) get fewer substeps and often skip their turn
             let viscosity = effective_viscosity(liquid, grid.temp(x, y));
-            if substep >= horizontal_flow_substeps(viscosity) || !rng.gen_bool(move_chance(viscosity)) {
+            if substep >= horizontal_flow_substeps(viscosity)
+                || !rng.gen_bool(move_chance(viscosity))
+            {
                 continue;
             }
 
@@ -100,8 +100,7 @@ fn spread_liquids_once<R: Rng + ?Sized>(grid: &mut Grid, rng: &mut R, substep: u
                         continue;
                     }
                     let next_x = next_x as usize;
-                    if grid.get(next_x, y) == AIR
-                        && !reserved_destinations[next_x + y * grid.width]
+                    if grid.get(next_x, y) == AIR && !reserved_destinations[next_x + y * grid.width]
                     {
                         target = Some(next_x);
                         break;
@@ -125,8 +124,8 @@ fn spread_liquids_once<R: Rng + ?Sized>(grid: &mut Grid, rng: &mut R, substep: u
 mod tests {
     use super::*;
     use crate::materials::STONE;
-    use rand::SeedableRng;
     use rand::rngs::StdRng;
+    use rand::SeedableRng;
 
     #[test]
     fn blocked_water_spreads_sideways_without_losing_material() {
@@ -140,6 +139,27 @@ mod tests {
         assert_eq!(grid.count_material(WATER), 1);
         assert_eq!(grid.get(2, 1), AIR);
         assert!(grid.get(1, 1) == WATER || grid.get(3, 1) == WATER);
+    }
+
+    #[test]
+    fn water_spreads_across_a_chunk_boundary() {
+        let boundary = crate::grid::CHUNK_SIZE;
+        let mut grid = Grid::new(boundary + 2, 3);
+        grid.fill_rect(0, 2, boundary + 2, 1, STONE);
+        grid.fill_rect(boundary - 2, 0, 1, 2, STONE);
+        grid.fill_rect(boundary + 1, 0, 1, 2, STONE);
+        grid.set(boundary - 1, 1, WATER);
+        let mut rng = StdRng::seed_from_u64(7);
+
+        for _ in 0..100 {
+            spread_liquids_with_rng(&mut grid, &mut rng, get_properties(WATER).viscosity);
+            if grid.get(boundary, 1) == WATER {
+                break;
+            }
+        }
+
+        assert_eq!(grid.get(boundary, 1), WATER);
+        assert_eq!(grid.count_material(WATER), 1);
     }
 
     #[test]
@@ -223,7 +243,10 @@ mod tests {
     fn hot_lava_is_almost_as_runny_as_water_and_cold_lava_is_thick() {
         assert!(effective_viscosity(LAVA, 1200.0) < 50);
         assert!(effective_viscosity(LAVA, 660.0) > 200);
-        assert_eq!(effective_viscosity(WATER, 1200.0), get_properties(WATER).viscosity);
+        assert_eq!(
+            effective_viscosity(WATER, 1200.0),
+            get_properties(WATER).viscosity
+        );
     }
 
     #[test]

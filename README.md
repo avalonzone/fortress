@@ -2,7 +2,7 @@
 
 A pixel-based fortress management game with a fully destructible environment. You can dig, build, watch materials fall and interact with physics simulations inspired by **The Powder Toy**.
 
-**Status:** Phase 2 mostly complete (Foundation, Rendering, Input, Liquids & Reactions)
+**Status:** Phase 3 started (chunked world storage and cross-chunk simulation)
 
 ---
 
@@ -388,11 +388,14 @@ the cursor. Focused, seeded tests cover each behavior (43 library tests total).
 **Goal:** Support large worlds (2048×2048+).
 
 **TODO:**
-- [ ] Refactor Grid → Chunk (256×256 or 128×128 blocks)
-- [ ] Implement World container (HashMap of chunks)
+- [x] Refactor grid storage into 128×128 chunks
+- [x] Implement a finite World container backed by a HashMap of chunks
 - [ ] Implement chunk loading/unloading around player viewport
-- [ ] Handle chunk boundary simulation (liquids don't stop at edges)
+- [x] Handle chunk boundary simulation (liquids don't stop at edges)
 - [ ] Save/load chunks to disk (serde)
+
+The current Bevy scene still creates a fixed 512×512 world. Viewport-based
+chunk loading/unloading and chunk persistence are the remaining streaming work.
 
 ---
 
@@ -561,7 +564,7 @@ cargo +nightly build --release
 
 ## 🚫 What's Not Yet
 
-🚫 Chunking & world streaming (Phase 3)  
+🚫 Viewport-based chunk streaming and chunk persistence (Phase 3)  
 🚫 Explosions  
 
 ---
@@ -592,6 +595,6 @@ cargo clean                        # Remove build artifacts
 
 ---
 
-**Last Updated:** 2026-10-12  
-**Phase:** 2 (Liquids, Reactions & Temperature) — complete  
-**Next:** Phase 3 (Chunking)
+**Last Updated:** 2026-10-15  
+**Phase:** 3 (chunked world storage and cross-chunk simulation) — in progress  
+**Next:** Viewport-based chunk loading/unloading and persistence

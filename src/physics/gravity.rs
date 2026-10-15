@@ -1,11 +1,10 @@
 /// Falling sand physics: gravity simulation.
-/// 
+///
 /// Algorithm:
 /// 1. Iterate from bottom to top (so falling sand doesn't get processed twice)
 /// 2. For each cell, if it's denser than what's below, try to move down
 /// 3. If blocked straight down, try diagonal (left-down or right-down)
 /// 4. Swap cells instead of copying for speed
-
 use crate::grid::Grid;
 use crate::materials::{get_properties, AIR, FIRE, STEAM};
 use rand::Rng;
@@ -25,15 +24,18 @@ fn apply_gases_with_rng<R: Rng + ?Sized>(grid: &mut Grid, rng: &mut R) {
             }
 
             if current == FIRE {
-                let touches_fuel = [(-1i32, 0i32), (1, 0), (0, -1), (0, 1)].iter().any(|&(dx, dy)| {
-                    let nx = x as i32 + dx;
-                    let ny = y as i32 + dy;
-                    nx >= 0
-                        && ny >= 0
-                        && (nx as usize) < grid.width
-                        && (ny as usize) < grid.height
-                        && get_properties(grid.get(nx as usize, ny as usize)).flammable
-                });
+                let touches_fuel =
+                    [(-1i32, 0i32), (1, 0), (0, -1), (0, 1)]
+                        .iter()
+                        .any(|&(dx, dy)| {
+                            let nx = x as i32 + dx;
+                            let ny = y as i32 + dy;
+                            nx >= 0
+                                && ny >= 0
+                                && (nx as usize) < grid.width
+                                && (ny as usize) < grid.height
+                                && get_properties(grid.get(nx as usize, ny as usize)).flammable
+                        });
                 if touches_fuel || rng.gen_bool(0.5) {
                     continue;
                 }
@@ -121,7 +123,11 @@ mod tests {
             for _ in 0..5 {
                 apply_gravity(&mut grid);
             }
-            assert_eq!(grid.get(1, 5), material, "free-falling cell must drop one row per step");
+            assert_eq!(
+                grid.get(1, 5),
+                material,
+                "free-falling cell must drop one row per step"
+            );
         }
     }
 
@@ -130,7 +136,7 @@ mod tests {
         let mut grid = Grid::new(10, 10);
         // Place sand at (5, 3)
         grid.set(5, 3, SAND);
-        
+
         // Before gravity
         assert_eq!(grid.get(5, 3), SAND);
         assert_eq!(grid.get(5, 4), AIR);
@@ -141,6 +147,17 @@ mod tests {
         // After gravity: sand should have moved down
         assert_eq!(grid.get(5, 3), AIR);
         assert_eq!(grid.get(5, 4), SAND);
+    }
+
+    #[test]
+    fn sand_falls_across_a_vertical_chunk_boundary() {
+        let mut grid = Grid::new(2, crate::grid::CHUNK_SIZE + 1);
+        grid.set(0, crate::grid::CHUNK_SIZE - 1, SAND);
+
+        apply_gravity(&mut grid);
+
+        assert_eq!(grid.get(0, crate::grid::CHUNK_SIZE - 1), AIR);
+        assert_eq!(grid.get(0, crate::grid::CHUNK_SIZE), SAND);
     }
 
     #[test]

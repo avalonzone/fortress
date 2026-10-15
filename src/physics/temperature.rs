@@ -4,7 +4,6 @@
 /// the lower of their conductivities; the resulting temperature change is
 /// divided by each cell's heat capacity. Fire is a constant heat source, and
 /// air relaxes toward room temperature so heat does not build up forever.
-
 use crate::grid::Grid;
 use crate::materials::{heat_capacity, thermal_conductivity, AIR, AMBIENT_TEMPERATURE, FIRE};
 
@@ -22,16 +21,21 @@ pub fn diffuse_heat(grid: &mut Grid) {
     let materials: Vec<_> = (0..width * height)
         .map(|i| grid.get(i % width, i / width))
         .collect();
-    let old = grid.temps_mut().clone();
-    let temps = grid.temps_mut();
+    let old: Vec<_> = (0..width * height)
+        .map(|i| grid.temp(i % width, i / width))
+        .collect();
+    let mut next = old.clone();
 
     for y in 0..height {
         for x in 0..width {
             let i = x + y * width;
             // Only look right and down so each pair is exchanged once
-            for j in [(x + 1 < width).then(|| i + 1), (y + 1 < height).then(|| i + width)]
-                .into_iter()
-                .flatten()
+            for j in [
+                (x + 1 < width).then(|| i + 1),
+                (y + 1 < height).then(|| i + width),
+            ]
+            .into_iter()
+            .flatten()
             {
                 let diff = old[i] - old[j];
                 if diff.abs() < 0.01 {
@@ -39,18 +43,19 @@ pub fn diffuse_heat(grid: &mut Grid) {
                 }
                 let k = thermal_conductivity(materials[i]).min(thermal_conductivity(materials[j]));
                 let flow = k * diff;
-                temps[i] -= flow / heat_capacity(materials[i]);
-                temps[j] += flow / heat_capacity(materials[j]);
+                next[i] -= flow / heat_capacity(materials[i]);
+                next[j] += flow / heat_capacity(materials[j]);
             }
         }
     }
 
     for i in 0..width * height {
         if materials[i] == AIR {
-            temps[i] += (AMBIENT_TEMPERATURE - temps[i]) * AIR_RELAXATION;
-        } else if materials[i] == FIRE && temps[i] < FIRE_TEMPERATURE {
-            temps[i] = FIRE_TEMPERATURE;
+            next[i] += (AMBIENT_TEMPERATURE - next[i]) * AIR_RELAXATION;
+        } else if materials[i] == FIRE && next[i] < FIRE_TEMPERATURE {
+            next[i] = FIRE_TEMPERATURE;
         }
+        grid.set_temp(i % width, i / width, next[i]);
     }
 }
 
@@ -69,6 +74,19 @@ mod tests {
 
         assert!(grid.temp(0, 0) < 1200.0);
         assert!(grid.temp(1, 0) > AMBIENT_TEMPERATURE);
+    }
+
+    #[test]
+    fn heat_flows_across_a_chunk_boundary() {
+        let boundary = crate::grid::CHUNK_SIZE;
+        let mut grid = Grid::new(boundary + 1, 1);
+        grid.set(boundary - 1, 0, LAVA);
+        grid.set(boundary, 0, STONE);
+
+        diffuse_heat(&mut grid);
+
+        assert!(grid.temp(boundary - 1, 0) < 1200.0);
+        assert!(grid.temp(boundary, 0) > AMBIENT_TEMPERATURE);
     }
 
     #[test]
@@ -96,7 +114,11 @@ mod tests {
         }
 
         // About 3 seconds at 60 steps/s: still well above the solidification point
-        assert!(grid.temp(2, 2) > 800.0, "lava cooled too fast: {}", grid.temp(2, 2));
+        assert!(
+            grid.temp(2, 2) > 800.0,
+            "lava cooled too fast: {}",
+            grid.temp(2, 2)
+        );
     }
 
     #[test]

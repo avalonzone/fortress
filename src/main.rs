@@ -1,7 +1,7 @@
 use bevy::prelude::*;
 use bevy::render::render_resource::{Extent3d, TextureDimension, TextureFormat};
 use bevy::asset::RenderAssetUsages;
-use fortress_lib::grid::Grid;
+use fortress_lib::grid::World;
 use fortress_lib::input::{InputState, apply_brush};
 use std::sync::Mutex;
 
@@ -15,7 +15,7 @@ const WATER_THICKNESS: usize = 50;
 
 // Shared grid state
 #[derive(Resource)]
-struct SharedGrid(Mutex<Grid>);
+struct SharedGrid(Mutex<World>);
 
 // Track the image handle
 #[derive(Resource)]
@@ -43,7 +43,7 @@ fn world_to_grid_coords(world_pos: Vec2) -> (i32, i32) {
 fn main() {
     println!("Fortress starting...");
     
-    let grid = Grid::new(512, 512);
+    let grid = World::new(512, 512);
     
     App::new()
         .add_plugins(DefaultPlugins)
@@ -306,6 +306,5 @@ fn render_grid(
         image.data = Some(pixels);
     }
 }
-
 
 
